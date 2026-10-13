@@ -14,10 +14,8 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-# int() and float() are too permissive to use as tests: int("1_000") is 1000,
-# int() accepts non-ASCII digits, and float() accepts "nan" and "inf".
-_INTEGER = re.compile(r"[+-]?[0-9]+")
-_FLOAT = re.compile(r"[+-]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?")
+from dqa.profiling._nulls import present_values
+from dqa.profiling._numbers import is_float, is_integer
 
 # A date has to look like one before pandas is allowed near it: two digit
 # groups joined by - or /, or a month name next to a number. Dots are not
@@ -71,14 +69,14 @@ def profile_dtypes(df: pd.DataFrame) -> DTypeProfile:
 
 
 def _profile_column(name: str, series: pd.Series) -> ColumnTypeProfile:
-    values, null_count = _present_values(series)
+    values, null_count = present_values(series)
     if not values:
         return ColumnTypeProfile(name, "empty", 1.0, null_count)
 
     # insertion order breaks ties, so "1" is an integer rather than a float
     rates = {
-        "integer": _rate(values, _is_integer),
-        "float": _rate(values, _is_float),
+        "integer": _rate(values, is_integer),
+        "float": _rate(values, is_float),
         "boolean": _rate(values, _is_boolean),
         "date": _date_rate(values),
     }
@@ -88,35 +86,8 @@ def _profile_column(name: str, series: pd.Series) -> ColumnTypeProfile:
     return ColumnTypeProfile(name, best, rates[best], null_count)
 
 
-def _present_values(series: pd.Series) -> tuple[list[str], int]:
-    """Split a column into its real values and a count of the missing ones.
-
-    A cell holding only whitespace is missing in every sense that matters, so
-    it is counted as null rather than as the text "". Placeholder words like
-    "NA" or "unknown" are left alone: deciding those mean missing is a
-    judgement about the data, not a fact about it.
-    """
-    values = []
-    null_count = 0
-    for value in series:
-        text = "" if pd.isna(value) else str(value).strip()
-        if text:
-            values.append(text)
-        else:
-            null_count += 1
-    return values, null_count
-
-
 def _rate(values: list[str], matches: Callable[[str], bool]) -> float:
     return sum(1 for value in values if matches(value)) / len(values)
-
-
-def _is_integer(value: str) -> bool:
-    return _INTEGER.fullmatch(value) is not None
-
-
-def _is_float(value: str) -> bool:
-    return _FLOAT.fullmatch(value) is not None
 
 
 def _is_boolean(value: str) -> bool:
