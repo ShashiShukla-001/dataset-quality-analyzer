@@ -23,6 +23,11 @@ from dqa.profiling.statistics import (
     StatisticsProfile,
     profile_statistics,
 )
+from dqa.profiling.value_counts import (
+    ValueCount,
+    ValueCountsProfile,
+    profile_value_counts,
+)
 
 __all__ = [
     "CardinalityProfile",
@@ -37,6 +42,8 @@ __all__ = [
     "MissingProfile",
     "ShapeProfile",
     "StatisticsProfile",
+    "ValueCount",
+    "ValueCountsProfile",
     "profile_cardinality",
     "profile_correlations",
     "profile_dtypes",
@@ -44,4 +51,5 @@ __all__ = [
     "profile_missing",
     "profile_shape",
     "profile_statistics",
+    "profile_value_counts",
 ]

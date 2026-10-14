@@ -50,3 +50,24 @@ class EmptyDatasetError(DQAError):
         path: str | None = None,
     ) -> None:
         super().__init__(message, path=path)
+
+
+class ColumnNotFoundError(DQAError):
+    """Raised when a requested column name is not present in the dataset."""
+
+    def __init__(
+        self,
+        column: str,
+        *,
+        available: list[str] | None = None,
+    ) -> None:
+        if available:
+            message = (
+                f"Column {column!r} not found; "
+                f"available columns: {', '.join(available)}"
+            )
+        else:
+            message = f"Column {column!r} not found in dataset"
+        super().__init__(message)
+        self.column = column
+        self.available = available
