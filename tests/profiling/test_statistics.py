@@ -39,6 +39,21 @@ def test_overflow_to_inf_is_not_a_number():
     assert profile.std is None
 
 
+def test_aggregate_overflow_is_undefined_not_infinite():
+    # Each value is finite, but mean/std of five 1e308 values overflow.
+    # Median of identical values is the value itself (no interpolate), so it stays.
+    profile = profile_statistics(
+        pd.DataFrame({"n": ["1e308", "1e308", "1e308", "1e308", "1e308"]})
+    ).by_name("n")
+
+    assert profile.numeric_count == 5
+    assert profile.min == 1e308
+    assert profile.max == 1e308
+    assert profile.median == 1e308
+    assert profile.mean is None
+    assert profile.std is None
+
+
 def test_whitespace_and_null_excluded():
     df = pd.DataFrame({"n": ["10", "", "  ", None, "20"]})
 
