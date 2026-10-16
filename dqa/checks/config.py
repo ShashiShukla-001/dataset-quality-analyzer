@@ -40,3 +40,5 @@ class CheckConfig:
     # 19.0 so a classic 95/5 split (ratio 19) is an ERROR under >=, not stuck
     # as a WARNING under a 20.0 cutoff that only fires at 95.2/4.8.
     imbalance_error_ratio: float = 19.0
+    # |pearson| at or above this with the target is possible leakage (WARNING).
+    leakage_correlation_threshold: float = 0.95

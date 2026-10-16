@@ -1,3 +1,5 @@
+from io import BytesIO
+
 import pandas as pd
 import pytest
 
@@ -82,3 +84,34 @@ def test_excel_loads_requested_sheet(workbook):
 def test_excel_unknown_sheet_raises(workbook):
     with pytest.raises(DatasetLoadError, match="not found"):
         load_dataset(workbook, sheet_name="ghost")
+
+
+def test_bytesio_uses_filename_for_csv():
+    buf = BytesIO(b"a,b\n1,2\n")
+    assert not getattr(buf, "name", None)
+
+    result = load_dataset(buf, filename="x.csv")
+
+    assert result.source_name == "x.csv"
+    assert result.file_format == "csv"
+    assert result.row_count == 1
+    assert result.column_count == 2
+
+
+def test_bytesio_uses_filename_for_xlsx(workbook):
+    buf = BytesIO(workbook.read_bytes())
+    assert not getattr(buf, "name", None)
+
+    result = load_dataset(buf, filename="x.xlsx", sheet_name="sales")
+
+    assert result.source_name == "x.xlsx"
+    assert result.file_format == "excel"
+    assert result.sheet_name == "sales"
+    assert result.available_sheets == ["summary", "sales"]
+
+
+def test_bytesio_without_name_or_filename_raises():
+    buf = BytesIO(b"a,b\n1,2\n")
+
+    with pytest.raises(UnsupportedFileFormatError, match="no name"):
+        load_dataset(buf)

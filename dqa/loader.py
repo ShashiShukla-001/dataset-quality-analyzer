@@ -41,14 +41,23 @@ class LoadResult:
     column_count: int
 
 
-def load_dataset(file: FileSource, *, sheet_name: str | None = None) -> LoadResult:
+def load_dataset(
+    file: FileSource,
+    *,
+    sheet_name: str | None = None,
+    filename: str | None = None,
+) -> LoadResult:
     """Load a CSV or Excel file.
 
     `file` may be a path or an open binary file object (as uploaded through
     FastAPI or Streamlit). For Excel files, `sheet_name` selects a sheet;
     the first sheet is used when it is not given.
+
+    When `file` is a stream with no usable ``.name`` (common for upload
+    buffers), pass ``filename=`` so the format can still be detected from
+    the extension. A stream's own ``.name`` wins when present.
     """
-    source_name = _source_name(file)
+    source_name = _source_name(file, filename=filename)
     extension = Path(source_name).suffix.lower()
 
     if extension in CSV_EXTENSIONS:
@@ -58,13 +67,15 @@ def load_dataset(file: FileSource, *, sheet_name: str | None = None) -> LoadResu
     raise UnsupportedFileFormatError(path=source_name, extension=extension)
 
 
-def _source_name(file: FileSource) -> str:
+def _source_name(file: FileSource, *, filename: str | None = None) -> str:
     if isinstance(file, (str, Path)):
         return str(file)
 
     name = getattr(file, "name", None)
     if isinstance(name, str) and name:
         return name
+    if isinstance(filename, str) and filename:
+        return filename
     raise UnsupportedFileFormatError(
         "Unsupported file format; the uploaded file has no name to identify it by"
     )
