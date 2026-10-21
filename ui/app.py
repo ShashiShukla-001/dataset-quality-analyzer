@@ -4,8 +4,9 @@ Run the API first, then::
 
     streamlit run ui/app.py
 
-First analysis runs without a target so the response can fill the target and
-sheet dropdowns; choosing either and clicking Analyze again re-runs with them.
+First analysis runs without a target. The page then reruns so the target and
+sheet dropdowns are filled from that response; choosing either and clicking
+Analyze again sends the choice.
 
 When the upload’s name or size changes, the cached report is dropped so the
 target/sheet dropdowns cannot keep listing columns from a previous file.
@@ -25,8 +26,22 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from ui.client import AnalyzeError, analyze_upload
+from ui.present import (
+    cardinality_rows,
+    correlation_rows,
+    dtype_rows,
+    findings_rows,
+    missing_rows,
+    overview_rows,
+    statistics_rows,
+    value_count_rows,
+)
 
 DEFAULT_API_URL = "http://127.0.0.1:8000"
+
+
+def _show_table(rows: list[dict]) -> None:
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
 st.set_page_config(page_title="Dataset Quality Analyzer", layout="wide")
 st.title("Dataset Quality Analyzer")
@@ -48,6 +63,10 @@ else:
         st.session_state["upload_identity"] = identity
         st.session_state.pop("report", None)
         st.session_state.pop("error", None)
+        # Drop widget state too, or a column picked for the previous file
+        # stays selected and Streamlit rejects it once it is no longer an option.
+        st.session_state.pop("target_column", None)
+        st.session_state.pop("sheet_name", None)
 
 report = st.session_state.get("report")
 
@@ -60,14 +79,10 @@ if report is not None:
 
 col_target, col_sheet = st.columns(2)
 with col_target:
-    selected_target = st.selectbox("Target column", target_options, index=0)
+    selected_target = st.selectbox("Target column", target_options, key="target_column")
 with col_sheet:
     if sheet_options:
-        current_sheet = report["metadata"].get("sheet_name") if report else None
-        default_idx = (
-            sheet_options.index(current_sheet) if current_sheet in sheet_options else 0
-        )
-        selected_sheet = st.selectbox("Sheet", sheet_options, index=default_idx)
+        selected_sheet = st.selectbox("Sheet", sheet_options, key="sheet_name")
     else:
         selected_sheet = None
         st.selectbox("Sheet", ["(upload an Excel file)"], disabled=True)
@@ -98,6 +113,9 @@ if st.button("Analyze", type="primary", disabled=uploaded is None):
     except requests.RequestException as exc:
         st.session_state["error"] = f"Could not reach API: {exc}"
         st.session_state.pop("report", None)
+    # The dropdowns above were drawn from the previous report. Rerun so they
+    # pick up the columns (or the error) before the user tries to choose one.
+    st.rerun()
 
 if error := st.session_state.get("error"):
     st.error(error)
@@ -112,23 +130,35 @@ c1.metric("Errors", counts["error"])
 c2.metric("Warnings", counts["warning"])
 c3.metric("Info", counts["info"])
 
+st.subheader("Overview")
+_show_table(overview_rows(report))
+
 st.subheader("Findings")
-findings = report["findings"]
-if not findings:
+finding_rows = findings_rows(report)
+if not finding_rows:
     st.write("No findings.")
 else:
-    st.dataframe(
-        pd.DataFrame(
-            [
-                {
-                    "severity": f["severity"],
-                    "check": f["check_name"],
-                    "column": f["column"],
-                    "message": f["message"],
-                }
-                for f in findings
-            ]
-        ),
-        use_container_width=True,
-        hide_index=True,
-    )
+    _show_table(finding_rows)
+
+with st.expander("Column types"):
+    _show_table(dtype_rows(report))
+with st.expander("Missing values"):
+    _show_table(missing_rows(report))
+with st.expander("Cardinality"):
+    _show_table(cardinality_rows(report))
+with st.expander("Statistics"):
+    _show_table(statistics_rows(report))
+with st.expander("Correlations"):
+    pairs = correlation_rows(report)
+    if not pairs:
+        st.caption("No numeric pairs.")
+    else:
+        _show_table(pairs)
+
+counts_rows = value_count_rows(report)
+if counts_rows is not None:
+    title = f"Value counts ({report['value_counts']['column_name']})"
+    if report["value_counts"].get("truncated"):
+        title += " — truncated"
+    with st.expander(title):
+        _show_table(counts_rows)

@@ -4,42 +4,32 @@ A tool that checks how good a dataset actually is before you use it for analysis
 
 You give it a CSV or Excel file. It loads the data, profiles it (shape, column types, missing values, duplicates, cardinality, basic statistics, correlations), then runs quality checks on top of that (missing-data issues, constant columns, class imbalance, outliers, possible data leakage). All of it comes together as a single quality report.
 
-**Status:** work in progress, being built step by step.
+**Status:** library, HTTP API, and Streamlit UI are in place.
 
-## Progress
+## What it does
 
-Done so far:
-
-- Dataset loader — CSV + Excel, with tests
-- Profiling: shape & columns — in progress
-
-Planned next:
-
-- Profiling: data types, missing values, duplicates, cardinality, statistics, correlations
-- Quality checks
-- Report assembly
-- FastAPI backend
-- Streamlit UI
+- Load CSV or Excel (every column as text; optional `filename=` for nameless upload streams)
+- Profile shape, types, missing values, duplicates, cardinality, statistics, correlations, and target value counts
+- Check missing data, constant columns, outliers, class imbalance, and possible leakage
+- Return one JSON report from `analyze_file` / `POST /analyze`
+- Streamlit uploads a file, calls the API, and shows severity counts, findings, and the profile tables
 
 ## Project layout
 
 | Path | What lives there |
 | --- | --- |
-| `dqa/` | Core library (loading, profiling, checks, reporting). No framework code. |
-| `api/` | FastAPI layer, built later |
-| `ui/` | Streamlit layer, built later |
-| `tests/` | Tests for `dqa/` |
+| `dqa/` | Core library. No framework code. |
+| `api/` | FastAPI: `GET /health`, `POST /analyze` |
+| `ui/` | Streamlit app plus the HTTP client it uses |
+| `tests/` | Tests for the library, API, and UI helpers |
 | `data/` | Sample datasets used while developing |
-
-The core library has no framework attached, so it can be tested and used on its own. The API and UI layers are thin wrappers over it.
 
 ## Setup
 
 ```powershell
 python -m venv venv
 .\venv\Scripts\Activate.ps1   # Windows
-pip install -e .              # installs dqa plus pandas and openpyxl
-pip install pytest            # for running the tests
+pip install -e ".[api,ui,dev]"
 ```
 
 ## Running tests
@@ -82,5 +72,40 @@ so nothing above the loader needs to know pandas is involved:
 | `UnsupportedFileFormatError` | Not a CSV or Excel file |
 | `EmptyDatasetError` | The file is empty, or has headers but no rows |
 | `DatasetLoadError` | The file is missing, unreadable, corrupt, or the sheet does not exist |
+| `ColumnNotFoundError` | `target` names a column that is not in the file |
 
-All three inherit from `DQAError`, so you can catch that one at the boundary.
+All of these inherit from `DQAError`.
+
+A full report, including findings, is `analyze_file`:
+
+```python
+from dqa import analyze_file
+
+report = analyze_file("people.csv", target="label")
+report.to_dict()
+```
+
+## API and UI
+
+From the repo root, start the API, then the UI (the UI talks to the API over HTTP):
+
+```powershell
+.\venv\Scripts\python.exe -m uvicorn api.main:app --reload
+.\venv\Scripts\python.exe -m streamlit run ui/app.py
+```
+
+`POST /analyze` takes the file plus optional form fields `target` and `sheet_name`. Domain errors map to 415 (unsupported format), 422 (unreadable or empty), and 400 (unknown target). The app copies at most 25 MB into memory for analysis; a production upload cap belongs in a reverse proxy in front of the process.
+
+## Screenshots
+
+Upload a CSV or Excel file, pick a target column if you have one, then run the analysis. The shots below use a small sample with missing values, a constant column, an outlier, and a column that copies the target.
+
+![Upload a file](docs/screenshots/upload.png)
+
+Findings for that sample, including a possible-leakage warning.
+
+![Findings](docs/screenshots/findings.png)
+
+Profile sections under that table show column types, missing values, and the other summaries.
+
+![Column types and missing values](docs/screenshots/profile.png)
