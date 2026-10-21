@@ -8,3 +8,6 @@ dist/
 build/
 .env
 .DS_Store
+
+# Throwaway files for manual end-to-end runs. Safe to delete.
+scratch_samples/
